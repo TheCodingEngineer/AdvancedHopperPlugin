@@ -1,0 +1,8 @@
+{
+  "advanced_hopper.inventory.title": "Trichter-Filter",
+  "advanced_hopper.inventory.filter.empty": "Steckplatz %s: leer",
+  "advanced_hopper.inventory.filter.used": "Steckplatz %s: %s",
+  "advanced_hopper.inventory.item.enabled": "Filter aktiviert",
+  "advanced_hopper.inventory.item.disabled": "Filter deaktivert",
+  "advanced_hopper.item.filter_hopper": "Trichter-Filter"
+}

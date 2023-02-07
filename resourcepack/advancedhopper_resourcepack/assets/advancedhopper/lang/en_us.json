@@ -1,0 +1,8 @@
+{
+  "advanced_hopper.inventory.title": "Hopper filter",
+  "advanced_hopper.inventory.filter.empty": "Filter slot %s: empty",
+  "advanced_hopper.inventory.filter.used": "Filter slot %s: %s",
+  "advanced_hopper.inventory.item.enabled": "Filter enabled",
+  "advanced_hopper.inventory.item.disabled": "Filter disabled",
+  "advanced_hopper.item.filter_hopper": "Hopper filter"
+}
