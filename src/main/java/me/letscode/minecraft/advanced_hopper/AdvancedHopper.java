@@ -26,11 +26,14 @@ public class AdvancedHopper {
 
     private final AdvancedHopperInv inventoryHolder;
 
-    public AdvancedHopper(Location position) {
-        this(new BlockPos(position));
+    private final AdvancedHopperPlugin plugin;
+
+    public AdvancedHopper(AdvancedHopperPlugin plugin, Location position) {
+        this(plugin, new BlockPos(position));
     }
 
-    public AdvancedHopper(BlockPos position) {
+    public AdvancedHopper(AdvancedHopperPlugin plugin, BlockPos position) {
+        this.plugin = plugin;
         this.position = position;
         this.enabled = false;
         this.filterItems = new HashMap<>();
@@ -53,6 +56,10 @@ public class AdvancedHopper {
 
             }
         }
+    }
+
+    public AdvancedHopperPlugin getPlugin() {
+        return plugin;
     }
 
     public BlockPos getPosition() {

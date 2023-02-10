@@ -1,21 +1,16 @@
 package me.letscode.minecraft.advanced_hopper;
 
-import net.kyori.adventure.text.TranslatableComponent;
 import org.bukkit.Material;
-import org.bukkit.block.Block;
 import org.bukkit.block.Hopper;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.*;
-import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 
@@ -27,18 +22,43 @@ public class EventListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
+    /*@EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockClick(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         Block block = event.getClickedBlock();
-        if (block != null && event.getAction() == Action.RIGHT_CLICK_BLOCK && !player.isSneaking()) {
+        if (block != null && event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             if (this.plugin.isFilterHopper(block)) {
                 var hopperState = (Hopper) block.getState();
                 var filterHopper = this.plugin.tryLoadFilterHopper(hopperState);
+
+                // only if player clicks with item and is sneaking do nothing
+                if (event.hasItem() && player.isSneaking()) {
+                    return;
+                }
+
                 if (filterHopper != null) {
                     filterHopper.openInventory(player);
                 }
                 event.setUseInteractedBlock(Event.Result.DENY);
+            }
+        }
+    }*/
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryOpenEvent(InventoryOpenEvent event) {
+        if (event.getInventory().getType() == InventoryType.HOPPER) {
+            var location = event.getInventory().getLocation();
+            if (location != null) {
+                var block = location.getBlock();
+                if (this.plugin.isFilterHopper(block)) {
+                    var hopperState = (Hopper) block.getState();
+                    var filterHopper = this.plugin.tryLoadFilterHopper(hopperState);
+
+                    if (filterHopper != null) {
+                        filterHopper.openInventory((Player) event.getPlayer());
+                    }
+                    event.setCancelled(true);
+                }
             }
         }
     }
@@ -86,7 +106,7 @@ public class EventListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onHopperPlace(BlockPlaceEvent event) {
         var block = event.getBlock();
-        if (block.getType() == Material.HOPPER && event.getItemInHand().isSimilar(this.plugin.createFilterHopperItem())) {
+        if (block.getType() == Material.HOPPER && this.plugin.isFilterHopperItem(event.getItemInHand())) {
             this.plugin.placeFilterHopper(block);
         }
     }
@@ -94,29 +114,20 @@ public class EventListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onHopperDestroy(BlockBreakEvent event) {
         var block = event.getBlock();
-        var player = event.getPlayer();
         if (this.plugin.isFilterHopper(block)) {
-            this.plugin.unloadFilterHopper((Hopper) block.getState());
+            this.plugin.removeFilterHopper((Hopper) block.getState());
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockItemDrop(BlockDropItemEvent event) {
-        if (event.getBlockState() instanceof Hopper) {
+        if (this.plugin.isFilterHopper(event.getBlockState())) {
             for (Item item : event.getItems()) {
                 var itemStack = item.getItemStack();
-                if (itemStack.getType() == Material.HOPPER) {
-                    if (itemStack.displayName() instanceof TranslatableComponent t1) {
-                        for (var component : t1.children()) {
-                            if (component instanceof  TranslatableComponent t2) {
-                                if (t2.key().equalsIgnoreCase(AdvancedHopperPlugin.FILTER_ITEM_KEY)) {
-                                    /* drop special item */
-                                    item.setItemStack(this.plugin.createFilterHopperItem());
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                if (itemStack.getType() == Material.HOPPER && itemStack.getItemMeta().hasDisplayName()) {
+                    /* drop special item */
+                    item.setItemStack(this.plugin.createFilterHopperItem());
+                    break;
                 }
             }
         }
