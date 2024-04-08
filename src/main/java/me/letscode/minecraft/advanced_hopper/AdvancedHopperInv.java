@@ -1,8 +1,10 @@
 package me.letscode.minecraft.advanced_hopper;
 
+import com.destroystokyo.paper.MaterialSetTag;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -11,16 +13,28 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 public class AdvancedHopperInv implements InventoryHolder {
+
+    private static final Component CHECK_MARK = Component.text( '✔', NamedTextColor.GREEN);
+
+    private static final Component CROSS_MARK = Component.text('✘', NamedTextColor.RED);
 
     private final AdvancedHopper hopperParent;
 
     private final Inventory inventory;
 
+    private int[] indicies;
+
     public AdvancedHopperInv(AdvancedHopper hopperParent) {
         this.hopperParent = hopperParent;
         this.inventory = this.createInventory();
+        this.indicies = new int[AdvancedHopper.MAX_FILTER_ITEMS];
     }
 
     private Inventory createInventory() {
@@ -57,8 +71,25 @@ mponent = new TranslatableComponent(key);
         return itemStack;
     }
 
+    private ItemStack createI18NItemDesc(Material material, String key, TextColor color, List<Component> desc,
+                                         Component... args) {
+        var itemStack = new ItemStack(material);
+        var itemMeta = itemStack.getItemMeta();
+        var displayComponent = this.hopperParent.getPlugin().translateComponent(key, args).color(color);
+        itemMeta.displayName(displayComponent);
+        itemMeta.lore(desc);
+        itemStack.setItemMeta(itemMeta);
+        return itemStack;
+    }
+
     public void updateInventory() {
         this.updateInventory(this.inventory);
+    }
+
+    public void tickInventory() {
+        if (!this.inventory.getViewers().isEmpty()) {
+            this.updateInventory(this.inventory);
+        }
     }
 
     private void updateInventory(Inventory inventory) {
@@ -81,13 +112,36 @@ mponent = new TranslatableComponent(key);
         for (int i = 0; i < 8; i++) {
             ItemStack item;
             if (items.containsKey(i)) {
-                var mat = items.get(i);
+                var filter = items.get(i);
                 // --- SPIGOT/PAPER IMPL ---
                 // item = createI18NItem(mat, "advanced_hopper.inventory.filter.used", ChatColor.WHITE,
                 //        new TextComponent("#" + (i+1)), new TranslatableComponent(getTranslationKey(mat)));
                 // --- ONLY PAPER IMPL ---
-                item = createI18NItem(mat, "advanced_hopper.inventory.filter.used",
-                       NamedTextColor.WHITE, Component.text("#" + (i+1)), Component.translatable(mat.translationKey()));
+                MaterialSetTag tagSet = TagFilters.getTag(filter.material());
+                Material material = filter.material();
+                Component materialName = Component.translatable(filter.material().translationKey());
+                if (tagSet != null) {
+                    if (filter.wildcard()) {
+                        int index = (this.indicies[i] + 1) % tagSet.getValues().size();
+                        this.indicies[i] = index;
+
+                        material = tagSet.getValues().stream().toList().get(index);
+                        materialName = Component.text(tagSet.key().toString());
+                    }
+
+                    item = createI18NItemDesc(material, "advanced_hopper.inventory.filter.used",
+                            NamedTextColor.WHITE,
+                            Arrays.asList(
+                                    text("Wildcard: ", NamedTextColor.GRAY).append(filter.wildcard() ? CHECK_MARK : CROSS_MARK),
+                                    text("Tag: ", NamedTextColor.GRAY).append(text(tagSet.getKey().toString(), NamedTextColor.DARK_GRAY))
+                            ),
+                            Component.text("#" + (i+1)),
+                            materialName);
+                } else {
+                    item = createI18NItem(material, "advanced_hopper.inventory.filter.used",
+                            NamedTextColor.WHITE, Component.text("#" + (i+1)),
+                            materialName);
+                }
             } else {
                 // --- SPIGOT/PAPER IMPL ---
                 // item = createI18NItem(Material.BARRIER, "advanced_hopper.inventory.filter.empty", ChatColor.RED,
@@ -99,11 +153,15 @@ mponent = new TranslatableComponent(key);
             inventory.setItem(i, item);
         }
     }
-    public String getTranslationKey(Material material) {
+    private String getTranslationKey(Material material) {
         if (material.isBlock()) {
             return String.format("block.minecraft.%s", material.getKey().getKey());
         }
         return String.format("item.minecraft.%s", material.getKey().getKey());
+    }
+
+    private Component text(String text, TextColor color) {
+        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
     }
 
     public final AdvancedHopper getHopperParent() {
@@ -111,7 +169,7 @@ mponent = new TranslatableComponent(key);
     }
 
     @Override
-    public Inventory getInventory() {
+    public @NotNull Inventory getInventory() {
         return this.inventory;
     }
 
@@ -127,10 +185,24 @@ mponent = new TranslatableComponent(key);
                 if (event.getAction() == InventoryAction.SWAP_WITH_CURSOR
                         && event.getCurrentItem() != null && event.getCursor() != null) {
                     ItemStack cursor = event.getCursor();
-                    this.hopperParent.getFilterItems().put(slot, cursor.getType());
+                    this.indicies[slot] = 0;
+                    this.hopperParent.getFilterItems().put(slot, new FilterItem(cursor.getType(), false));
                     this.updateInventory(this.inventory);
-                } else if (event.getAction() == InventoryAction.PICKUP_ONE
-                        || event.getAction() == InventoryAction.PICKUP_ALL) {
+                } else if (event.isRightClick()) {
+                    var item = this.hopperParent.getFilterItems().get(slot);
+                    if (item != null) {
+                        var tagRegistry = TagFilters.getTag(item.material());
+                        if (item.wildcard()) {
+                            this.indicies[slot] = 0;
+                            this.hopperParent.getFilterItems().put(slot, new FilterItem(item.material(), false));
+                            this.updateInventory(this.inventory);
+                        } else  if (tagRegistry != null) {
+                            this.indicies[slot] = 0;
+                            this.hopperParent.getFilterItems().put(slot, new FilterItem(item.material(), true));
+                            this.updateInventory(this.inventory);
+                        }
+                    }
+                } else if (event.isLeftClick()) {
                     this.hopperParent.getFilterItems().remove(slot);
                     this.updateInventory(this.inventory);
                 }

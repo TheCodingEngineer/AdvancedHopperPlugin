@@ -16,10 +16,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.ResourceBundle;
+import java.util.*;
 import java.util.logging.Level;
 
 public class AdvancedHopperPlugin extends JavaPlugin {
@@ -38,6 +35,8 @@ public class AdvancedHopperPlugin extends JavaPlugin {
 
     private ResourceBundle langBundle;
 
+    private int taskId;
+
     @Override
     public void onLoad() {
         this.hopperDataKey = new NamespacedKey(this, "data");
@@ -52,10 +51,18 @@ public class AdvancedHopperPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(new EventListener(this), this);
+
+        this.taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, () -> {
+            this.hopperCache.values().forEach(AdvancedHopper::tickInventory);
+        }, 0L, 20L);
+
+        this.unloadAllFilterHoppers();
     }
 
     @Override
-    public void onDisable() { }
+    public void onDisable() {
+        Bukkit.getScheduler().cancelTask(this.taskId);
+    }
 
 
     public NamespacedKey getHopperDataKey() {
@@ -243,6 +250,23 @@ public class AdvancedHopperPlugin extends JavaPlugin {
         if (count > 0) {
             this.getLogger().log(Level.INFO, "Unloaded {0} filter hoppers in chunk {1}/{2}", new Object[] {
                     count, chunk.getX(), chunk.getZ() });
+        }
+    }
+
+    public void unloadAllFilterHoppers() {
+        int count = 0;
+        for (var blockPos : new ArrayList<>(this.hopperCache.keySet())) {
+            var tile = blockPos.toLocation().getBlock().getState();
+            if (tile instanceof Hopper hopper) {
+                if (this.isFilterHopper(hopper.getLocation())) {
+                    this.unloadFilterHopper(hopper);
+                    count++;
+                }
+            }
+        }
+
+        if (count > 0) {
+            this.getLogger().log(Level.INFO, "Unloaded {0} filter hoppers", new Object[] { count });
         }
     }
 
